@@ -1,0 +1,95 @@
+---
+title: "Project1"
+author: "Chester Poon"
+date: "9/18/2018"
+output: html_document
+---
+
+First we read the file into an object.  Also, it seems the best way to tackle this problem would probably be with regular expressions.  Once the file has been read in, we can convert the entire object to a string.
+```{r}
+f <- 'tournamentinfo.txt'
+f_str <- readChar(f,file.info(f)$size)
+```
+
+Our next step is now to extract each item from the string: player name, state, points, pre-score, and average of opponent score.  Let's start with player name.  All player names are in upper case letters where first names, surnames, middle names, and initials are separated by a single space.  When we pull the text out using regular expressions, we also accidentally pull in the column name "UCSF ID".  Let's remove that from our vector.
+
+```{r}
+library(stringr)
+player <- vector()
+player_ext <- unlist(str_extract_all(f_str,"[[:upper:]]{1,}([[:blank:]][[:upper:]]{1,})+"))
+for (i in player_ext) {
+  if (i != 'USCF ID') {
+    player <- c(player,i)
+  }
+}
+```
+
+Next is the player's state.  The pattern is that each state is preceded by three spaces.  We can extract the states based on this pattern and then fix the text by removing the spaces afterwards.
+
+```{r}
+state <- vector()
+player_state <- unlist(str_extract_all(f_str,"[[:blank:]]{3}[[:upper:]]{2}"))
+for (i in player_state) {
+  state <- c(state,substr(i,4,5))
+}
+```
+
+Next is the player's points.  This is the easiest thing to pull in the entire string, which is any number followed by a period followed by another number.
+
+```{r}
+player_pts <- as.numeric(unlist(str_extract_all(f_str,"[[:digit:]]\\.[[:digit:]]")))
+```
+
+Our next task is to pull the player's pre-score.  We notice that each pre-score is preceded by "R: " followed by 3-4 digits.  We can use that to pull all the pre-scores.
+
+```{r}
+pre_score <- vector()
+player_pre <- unlist(str_extract_all(f_str,"R:[[:blank:]].[[:digit:]]{3}"))
+for (i in player_pre) {
+  pre_score <- c(pre_score,substr(i,4,7))
+}
+pre_score <- as.numeric(pre_score)
+```
+
+Now the most difficult part is getting the average opponent score.  We know that the opponent IDs plus whether the game was a win, loss, draw, etc follows the points earned for each player.  So we start by extracting all that information first.  The string length for each row is consistent, so we can extract based on the character length of the row.  Then we extract the opponent IDs from each row.
+
+```{r}
+rounds <- str_extract_all(f_str,"[[:digit:]]\\.[[:digit:]][[:blank:]]{2}\\|[[:upper:]].{41}")
+for (i in rounds) {
+   l <- str_extract_all(i,".[[:digit:]]\\|")
+}
+```
+
+Now that we have a list of all the opponent IDs, we can reformat the data to numeric and then create a data frame of games played.
+
+```{r}
+l <- lapply(l,substr,1,2)
+l <- lapply(l,as.numeric)
+games <- data.frame(t(sapply(l, `length<-`, max(lengths(l)))))
+```
+
+Now our data frame of games is constructed, we need to replace all the opponent IDs with their pre-scores and then calculate the average.
+
+```{r}
+player_id <- seq(from = 1, to = length(player))
+
+for (i in player_id) {
+  games$X1[i] <- pre_score[games$X1[i]]
+  games$X2[i] <- pre_score[games$X2[i]]
+  games$X3[i] <- pre_score[games$X3[i]]
+  games$X4[i] <- pre_score[games$X4[i]]
+  games$X5[i] <- pre_score[games$X5[i]]
+  games$X6[i] <- pre_score[games$X6[i]]
+  games$X7[i] <- pre_score[games$X7[i]]
+}
+
+avg_opp_score <- round(rowMeans(games,na.rm = TRUE))
+```
+
+We now have a vector for each item that we need to create our csv file.
+
+```{r}
+df <- data.frame(player,state,player_pts,pre_score,avg_opp_score)
+write.csv(df,"tournament.csv",row.names = FALSE)
+```
+
